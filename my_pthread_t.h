@@ -43,8 +43,12 @@ typedef struct queue {
     struct node *back;
     int size;
 } queue;
+void myplay();
 
 tcb* dequeue ();
+void stop_itime();
+void stop_itime();
+void sighandler(int sig);
 // Feel free to add your own auxiliary data structures
 
 
