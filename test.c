@@ -5,12 +5,13 @@
 #define stac 40000
 ucontext_t thr, orig,main_context,op_context;
 queue run_q;
-tcb *current=NULL;
-node* killer=NULL; //where threads go to be reaped
+kilist* kilhim=NULL;//where threads go to be reaped
+tcb *current=NULL; //One thread exevuting
+
 //signal handler
 int count = 0;
 int id=0;
-int SYS=0;
+int SYS=0;//IF I am in OS or not used to preven sighandlers from messing up the system
 struct itimerval it;
 struct sigaction act, oact;
 
@@ -39,7 +40,9 @@ void stop_itime(){
 
 void sighandler(int sig)
 {	//must be fixed this is for changing priority
-	if(SYS=0){
+	if(SYS==0){
+		SYS=1;
+		stop_itime();
 		tcb *swap_tcb = (tcb *) malloc(sizeof(tcb));
 		swap_tcb=current;
 		current=dequeue();
@@ -49,6 +52,7 @@ void sighandler(int sig)
 			enqueue(swap_tcb);
 		}	
 		start_itime();
+		SYS=0;
 		setcontext(&current->uc);
 	}else{
 		return;
@@ -58,12 +62,26 @@ void sighandler(int sig)
 
 //start Itimer
 void my_pthread_exit(void *value_ptr) {
-SYS=1;
+SYS=1;		//do a seperate case for main context in that the whole program will end.
+stop_itime();
 tcb *nswap_tcb = (tcb *) malloc(sizeof(tcb));// might want to include kill
 nswap_tcb=dequeue(); //when kill list is made to put for reapable threads is created, then edit code
-			//do it here
+if(kilhim==NULL){
+kilhim= (kilist *) malloc(sizeof(kilist));
+node *temp = (node *) malloc(sizeof(node));
+temp->thread=current;
+temp->next=NULL;
+kilhim->begin=temp;
+}else{
+node *temp = (node *) malloc(sizeof(node));
+temp->thread=current;
+temp->next=NULL;
+temp->next=kilhim->begin;
+kilhim->begin=temp;
+}			//do it here
 current=nswap_tcb;
 start_itime();
+SYS=0;
 setcontext(&current->uc);
 };
 
@@ -93,6 +111,8 @@ int my_pthread_create(my_pthread_t * thread, pthread_attr_t * attr, void *(*func
 		}
 	//set main as current thread context
 	    current = main_tcb;
+	}else{
+	stop_itime();
 	}
 
 	if(getcontext(&thr)!=0){
@@ -204,6 +224,7 @@ int enqueue (tcb *thread) {
 
 int my_pthread_yield() {
 	SYS=1;
+	stop_itime();
 	tcb *tem_tcb = (tcb *) malloc(sizeof(tcb));
 	tem_tcb=dequeue();
 	//worry about null case next
@@ -218,6 +239,22 @@ int my_pthread_yield() {
 	return 0;
 };
 
+/*int my_pthread_join(my_pthread_t thread, void **value_ptr) {
+	
+	SYS=1;
+	int x=(int)thread;
+	if(){
+	
+	}
+	while(ptr!=NULL){
+	if(
+	ptr->thread->tid=
+
+	}
+	SYS=0;
+	//figure out quick value point
+	return 0;
+};*/
 
 
 
