@@ -43,6 +43,9 @@ typedef struct queue {
     struct node *back;
     int size;
 } queue;
+typedef struct kilist{
+	struct node *begin; 
+}kilist;
 void myplay();
 
 tcb* dequeue ();
