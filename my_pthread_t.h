@@ -19,17 +19,20 @@
 #include "ucontext.h"//add ucontext
 
 typedef uint my_pthread_t;
+typedef uint my_pthread_t;
 
 typedef struct threadControlBlock {
     /* add something here */
     int id; //TID
     ucontext_t uc; 
     void *return_value; 
+    int mutex;
 } tcb; 
 
 /* mutex struct definition */
 typedef struct my_pthread_mutex_t {
-    /* add something here */
+    int mid; //mutex id
+    int lock;	 //locking mechanism (this is given to user and the lock is used for atomicity)
 } my_pthread_mutex_t;
 
 /* define your data structures here: */
