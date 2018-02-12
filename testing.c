@@ -447,7 +447,7 @@ int main(){
      
     my_pthread_create(thread,NULL, (void *)(*myplay),NULL);
     my_pthread_yield();
-   // my_pthread_join(1,NULL);
+    my_pthread_join(1,NULL);
     printf("tim tam\n");
 
 
