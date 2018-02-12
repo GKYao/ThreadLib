@@ -7,7 +7,7 @@
 // iLab Server: 
 #ifndef MY_PTHREAD_T_H
 #define MY_PTHREAD_T_H
-
+#define QUEUE_LEVELS 6
 #define _GNU_SOURCE
 
 /* include lib header files that you need here: */
@@ -36,15 +36,35 @@ typedef struct my_pthread_mutex_t {
 typedef struct node {
     struct node *next;
     tcb * thread;
+    int level;
 } node; 
 
 typedef struct queue {
     struct node *head;
     struct node *back;
     int size;
+    int level;
+    int multiplier;
+    int threads_done;
 } queue;
+
+typedef struct ready_queue {
+
+queue *queues[QUEUE_LEVELS];
+
+} ready_queue;
+
+typedef struct otherQueues{
+    node *head;
+    node *back;
+} otherQueues;
+
+
+
+
+
 typedef struct kilist{
-	struct node *begin; 
+    struct node *begin; 
 }kilist;
 void myplay();
 
