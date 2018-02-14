@@ -64,6 +64,11 @@ typedef struct otherQueues{
 } otherQueues;
 
 
+typedef struct waitQueues{
+    struct queue *head;
+    struct waitQueues *back;
+    int id;
+} waitQueues;
 
 
 
