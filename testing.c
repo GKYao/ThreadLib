@@ -19,7 +19,7 @@ struct itimerval it;
 struct sigaction act, oact;
 int lock=0;
 int mutexid=1;
-
+waitQueues * waitQ=NULL;
 
 void multilevelQueue(tcb * main){
 
@@ -457,6 +457,56 @@ int my_pthread_join(my_pthread_t thread, void **value_ptr) {
     return 0;
 };
 
+
+void waitQinit(){
+    waitQueues *waitQ=malloc(sizeof(waitQueues));
+}
+
+
+void waitQadd(waitQueues * new_wait_Q){
+    struct waitQueues * temp;
+    struct queue * target;
+    if(waitQ->head==NULL){
+       waitQ=new_wait_Q;
+       return;
+    }
+    //traverse the waitq
+    temp=waitQ->back;
+    while(temp->back!=NULL){
+        temp=temp->back;
+    }
+    temp->back=new_wait_Q;
+    return;
+}
+
+
+int my_pthread_mutex_init(my_pthread_mutex_t *mutex, const pthread_mutexattr_t *mutexattr){
+    if(waitQ==NULL){
+        waitQinit();
+    }
+    waitQueues * newQ=malloc(sizeof(waitQueues));
+    newQ->head=NULL;
+    newQ->id=mutex->mid;
+    waitQadd(newQ);
+}
+
+
+int my_pthread_mutex_lock (my_pthread_mutex_t *mutex){
+    stop_itime();
+    while (mutex->lock == 1) {
+        stop_itime();
+        my_pthread_yield();
+        start_itime();
+    }
+    mutex->lock = 1;
+    start_itime();
+    return 0;
+}
+
+int my_pthread_mutex_unlock(my_pthread_mutex_t *mutex) {
+    mutex->lock = 0;
+    return 0;
+}
 
 
 int main(){
