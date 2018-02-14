@@ -7,7 +7,7 @@
 // iLab Server: 
 #ifndef MY_PTHREAD_T_H
 #define MY_PTHREAD_T_H
-#define QUEUE_LEVELS 6
+#define QUEUE_LEVELS 5
 #define _GNU_SOURCE
 
 /* include lib header files that you need here: */
