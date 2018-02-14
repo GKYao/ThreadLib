@@ -19,7 +19,7 @@ struct itimerval it;
 struct sigaction act, oact;
 int lock=0;
 int mutexid=1;
-waitQueues * waitQ=NULL;
+
 
 void multilevelQueue(tcb * main){
 
@@ -93,18 +93,19 @@ void multilevelQueue(tcb * main){
 
 void start_itime(){ //later put up a way to tell how much time using multileveled queue
     //setup Itimer
+	int x=level+1;
     act.sa_handler = sighandler;
     sigemptyset(&act.sa_mask);
     act.sa_flags = 0;
     sigaction(SIGPROF, &act, &oact); 
     it.it_interval.tv_sec = 0;
-    it.it_interval.tv_usec = 25000;
+    it.it_interval.tv_usec = 25000*x;
     it.it_value.tv_sec = 0;
-    it.it_value.tv_usec = 25000;
+    it.it_value.tv_usec = 25000*x;
     it.it_interval.tv_sec = 0;
-    it.it_interval.tv_usec = 25000;
+    it.it_interval.tv_usec = 25000*x;
     it.it_value.tv_sec = 0;
-    it.it_value.tv_usec = 25000;
+    it.it_value.tv_usec = 25000*x;
     setitimer(ITIMER_PROF, &it, NULL);
 }
 //Stop Itimer
@@ -118,45 +119,79 @@ void sighandler(int sig)
  if(SYS==0){
         SYS=1;
         stop_itime();
+	int j=0;
         tcb *swap_tcb = (tcb *) malloc(sizeof(tcb));
         swap_tcb=current;
-      if(current==NULL){
-	current==swap_tcb;
-	return;
+	int z=swap_tcb->id;
+        if(current==NULL){
+		current==swap_tcb;
+		return;
         }	 
-   if(readyQ->queues[level]->head==NULL){
+   	if(readyQ->queues[level]->head==NULL){
 		if(level!=4){
-		level=level+1;
-		enqueue(swap_tcb);
-		level=level-1;
+			level=level+1;
+			enqueue(swap_tcb);
+			level=level-1;
+		}else{
+			j=4;
 		}
 		readyQ->queues[level]->threads_done=0;
+		int a=level+1;
+		if(level!=4){
+			if(readyQ->queues[level]->head==NULL&&readyQ->queues[a]->head->thread->id==z){
+				if(level<3){
+				level=level+2;
+				}else{
+				level=0;
+				}
+			}
+		}
 		while(readyQ->queues[level]->head==NULL){
 			level=level+1;
 			if(level%5==0){
 			level=0;
 			}
 		}
+		if(j=4){
+			int x=level;
+			level=4;	
+			enqueue(swap_tcb);
+			level=x;
+		}
 	   current=dequeue();
-	}else{
+	}else{			//case head is not null meaning yielding with sig does not have a priority switch
  		readyQ->queues[level]->threads_done=readyQ->queues[level]->threads_done+1;
 		if(level!=4){
-		level=level+1;
-		enqueue(swap_tcb);
-		level=level-1;
+			level=level+1;
+			enqueue(swap_tcb);
+			level=level-1;
+		}else{
+			enqueue(swap_tcb);
 		}   
 		if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){
 			readyQ->queues[level]->threads_done=0;
+			int a=level+1;
+		if(level<4){
+			if(readyQ->queues[a]->head->thread->id==z){
+				level=level+1;
+			}
+		}
 			level=level+1;
 			if(level%5==0){
 			level=0;
+			}
+			while(readyQ->queues[level]->head==NULL){
+				level=level+1;
+				if(level%5==0){
+				level=0;
+				}
 			}
 		}
    	current=dequeue();
         }   
         start_itime();
         SYS=0;
-        setcontext(&current->uc);
+        swapcontext(&swap_tcb->uc,&current->uc);
     }
         return;    
 }
@@ -185,6 +220,8 @@ temp->thread->return_value=value_ptr;
 temp->next=kilhim->begin;
 kilhim->begin=temp;
 }           //do it here
+tcb *n_tcb = (tcb *) malloc(sizeof(tcb));
+n_tcb=current;
 if(readyQ->queues[level]->head==NULL){
 	readyQ->queues[level]->threads_done=0;
 	while(readyQ->queues[level]->head==NULL){
@@ -196,11 +233,17 @@ if(readyQ->queues[level]->head==NULL){
    current=dequeue();
 }else{
  	readyQ->queues[level]->threads_done=readyQ->queues[level]->threads_done+1;    
-	if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){
+	if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){ //Checked logic it is for, when exiting a queue reaches priority limit due to the thread being elminiated counting as a thread done. This leads to switching to the next. 
 		readyQ->queues[level]->threads_done=0;
 		level=level+1;
 		if(level%5==0){
 		level=0;
+		}
+		while(readyQ->queues[level]->head==NULL){
+			level=level+1;
+			if(level%5==0){
+				level=0;
+			}
 		}
 	}
 tcb *nswap_tcb = (tcb *) malloc(sizeof(tcb));// might want to include kill
@@ -209,7 +252,7 @@ current=nswap_tcb;
 }
 start_itime();
 SYS=0;
-setcontext(&current->uc);
+swapcontext(&n_tcb->uc,&current->uc);
 };
 
 
@@ -280,8 +323,12 @@ int my_pthread_create(my_pthread_t * thread, pthread_attr_t * attr, void *(*func
     new_tcb->uc=thr;
     tcb *temp_tcb = (tcb *) malloc(sizeof(tcb));
     temp_tcb=current;
-    enqueue(current);
-    current=new_tcb; //now it is that our new tcb is going to run
+	int d=level;
+	level=0;
+    enqueue(new_tcb);
+	level=d;	
+  /*  enqueue(current);
+    //current=new_tcb; //now it is that our new tcb is going to run
     readyQ->queues[level]->threads_done=readyQ->queues[level]->threads_done+1;    
 	if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){
 		readyQ->queues[level]->threads_done=0;
@@ -289,10 +336,17 @@ int my_pthread_create(my_pthread_t * thread, pthread_attr_t * attr, void *(*func
 		if(level%5==0){
 		level=0;
 		}
+		while(readyQ->queues[level]->head==NULL){
+		level=level+1;
+			if(level%5==0){
+			level=0;
+			}
+		}
 	}
     start_itime();
     SYS=0;
-    swapcontext(&temp_tcb->uc,&current->uc);    
+    swapcontext(&temp_tcb->uc,&current->uc);*/
+    my_pthread_yield();
     return 0;
 };
 
@@ -301,11 +355,12 @@ void myfo(){
     printf("billy\n");
 //my_pthread_t * th=malloc(sizeof(my_pthread_t));
 //my_pthread_create(th,NULL, (void *)(*myplay),NULL);
-//while(1){					context switching works
-//printf("hi there\n");
+//while(1){				//	context switching works
+printf("hi there\n");
 //
 //}
-   my_pthread_yield(); //repeats twice
+   my_pthread_yield();
+printf("second to las\n"); //repeats twice
     //my_pthread_exit(NULL);
    // setcontext(&current->uc);
 
@@ -315,6 +370,7 @@ void myplay(){
     printf("bob\n");
 my_pthread_t * th=malloc(sizeof(my_pthread_t));
 my_pthread_create(th,NULL, (void *)(*myfo),NULL);
+printf("third\n");
     my_pthread_yield(); //repeats once yield must be fixed it is broken, this means it is failing to properly do its job
     printf("MOMMY\n");
 //    setcontext(&current->uc);
@@ -381,7 +437,7 @@ int my_pthread_yield() {
 		if(level%5==0){
 		level=0;
 		}
-	while(readyQ->queues[level]->head==NULL&&level!=j){
+	while(readyQ->queues[level]->head==NULL){
 		level=level+1;
 		if(level%5==0){
 		level=0;
@@ -392,14 +448,21 @@ int my_pthread_yield() {
  		readyQ->queues[level]->threads_done=readyQ->queues[level]->threads_done+1;
 		temp_tcb=current;
 		enqueue(current);
-		current=dequeue();    
+		//current=dequeue();    
 		if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){
 			readyQ->queues[level]->threads_done=0;
 			level=level+1;
 			if(level%5==0){
 			level=0;
 			}
+			while(readyQ->queues[level]->head==NULL){ //if next is null
+				level=level+1;
+				if(level%5==0){
+				level=0;
+				}
+			}
 		}
+	current=dequeue(); 
 }
     start_itime();
     SYS=0;
@@ -452,61 +515,11 @@ int my_pthread_join(my_pthread_t thread, void **value_ptr) {
 	free(temp);
 	}
 	my_pthread_yield();
-	start_itime();
-	SYS=0;
+	//start_itime();
+	//SYS=0;
     return 0;
 };
 
-
-void waitQinit(){
-    waitQueues *waitQ=malloc(sizeof(waitQueues));
-}
-
-
-void waitQadd(waitQueues * new_wait_Q){
-    struct waitQueues * temp;
-    struct queue * target;
-    if(waitQ->head==NULL){
-       waitQ=new_wait_Q;
-       return;
-    }
-    //traverse the waitq
-    temp=waitQ->back;
-    while(temp->back!=NULL){
-        temp=temp->back;
-    }
-    temp->back=new_wait_Q;
-    return;
-}
-
-
-int my_pthread_mutex_init(my_pthread_mutex_t *mutex, const pthread_mutexattr_t *mutexattr){
-    if(waitQ==NULL){
-        waitQinit();
-    }
-    waitQueues * newQ=malloc(sizeof(waitQueues));
-    newQ->head=NULL;
-    newQ->id=mutex->mid;
-    waitQadd(newQ);
-}
-
-
-int my_pthread_mutex_lock (my_pthread_mutex_t *mutex){
-    stop_itime();
-    while (mutex->lock == 1) {
-        stop_itime();
-        my_pthread_yield();
-        start_itime();
-    }
-    mutex->lock = 1;
-    start_itime();
-    return 0;
-}
-
-int my_pthread_mutex_unlock(my_pthread_mutex_t *mutex) {
-    mutex->lock = 0;
-    return 0;
-}
 
 
 int main(){
@@ -514,15 +527,24 @@ int main(){
     //printf("%d\n",current->id );
 //Createthread
     my_pthread_t * thread=malloc(sizeof(my_pthread_t));
-     
+printf("first\n");     
     my_pthread_create(thread,NULL, (void *)(*myplay),NULL);
+printf("fourth\n");
     my_pthread_yield();
+	printf("sixth\n");
     my_pthread_join(1,NULL);
-    my_pthread_create(thread,NULL, (void *)(*myplay),NULL);	
+    //my_pthread_create(thread,NULL, (void *)(*myplay),NULL);	
     printf("tim tam\n");
-
-
-
+my_pthread_yield();
+printf("tim tam\n");
+my_pthread_yield();
+printf("tim tam\n");
+my_pthread_yield();
+printf("tim tam\n");
+my_pthread_yield();
+printf("tim tam\n");
+my_pthread_yield();
+printf("tim tam\n");
     return 0;
 
 }

@@ -19,7 +19,7 @@
 #include "ucontext.h"//add ucontext
 
 typedef uint my_pthread_t;
-typedef uint my_pthread_t;
+//typedef uint my_pthread_t;
 
 typedef struct threadControlBlock {
     /* add something here */
@@ -64,11 +64,6 @@ typedef struct otherQueues{
 } otherQueues;
 
 
-typedef struct waitQueues{
-    struct queue *head;
-    struct waitQueues *back;
-    int id;
-} waitQueues;
 
 
 
