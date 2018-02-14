@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <sys/time.h>
 #define stac 40000
+#define taken 1
+#define untaken 0
 ucontext_t thr, orig,main_context,op_context;
 queue run_q;
 kilist* kilhim=NULL;//where threads go to be reaped
@@ -15,13 +17,15 @@ int SYS=0;//IF I am in OS or not used to preven sighandlers from messing up the 
 int level=0;
 struct itimerval it;
 struct sigaction act, oact;
+int lock=0;
+int mutexid=1;
 
 
 void multilevelQueue(tcb * main){
 
     readyQ = malloc(sizeof(ready_queue));
     int i;
-    for (i = 0; i < 6; i++){
+    for (i = 0; i < 5; i++){
         readyQ->queues[i] = (queue* )malloc(sizeof(queue));
         readyQ->queues[i]->head = NULL;
         readyQ->queues[i]->back = NULL;
@@ -30,18 +34,18 @@ void multilevelQueue(tcb * main){
         //readyQ->queues[i]->level = i;
     }
 //multipliers/threads_done for queues
-    readyQ->queues[0]->multiplier = 1;
+    //readyQ->queues[0]->multiplier = 1;
+   // readyQ->queues[0]->threads_done= 0;
+    readyQ->queues[0]->multiplier = 10;
     readyQ->queues[0]->threads_done= 0;
-    readyQ->queues[1]->multiplier = 10;
+    readyQ->queues[1]->multiplier = 8;
     readyQ->queues[1]->threads_done= 0;
-    readyQ->queues[2]->multiplier = 8;
+    readyQ->queues[2]->multiplier = 6;
     readyQ->queues[2]->threads_done= 0;
-    readyQ->queues[3]->multiplier = 6;
+    readyQ->queues[3]->multiplier = 4;
     readyQ->queues[3]->threads_done= 0;
-    readyQ->queues[4]->multiplier = 4;
-    readyQ->queues[4]->threads_done= 0;
-    readyQ->queues[5]->multiplier = 2; 
-    readyQ->queues[5]->threads_done= 0;  
+    readyQ->queues[4]->multiplier = 2; 
+    readyQ->queues[4]->threads_done= 0;  
  
     //node *High_Node = NULL;
 //insert main context
@@ -121,7 +125,7 @@ void sighandler(int sig)
 	return;
         }	 
    if(readyQ->queues[level]->head==NULL){
-		if(level!=5&&level!=0){
+		if(level!=4){
 		level=level+1;
 		enqueue(swap_tcb);
 		level=level-1;
@@ -129,14 +133,14 @@ void sighandler(int sig)
 		readyQ->queues[level]->threads_done=0;
 		while(readyQ->queues[level]->head==NULL){
 			level=level+1;
-			if(level%6==0){
+			if(level%5==0){
 			level=0;
 			}
 		}
 	   current=dequeue();
 	}else{
  		readyQ->queues[level]->threads_done=readyQ->queues[level]->threads_done+1;
-		if(level!=5&&level!=0){
+		if(level!=4){
 		level=level+1;
 		enqueue(swap_tcb);
 		level=level-1;
@@ -144,7 +148,7 @@ void sighandler(int sig)
 		if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){
 			readyQ->queues[level]->threads_done=0;
 			level=level+1;
-			if(level%6==0){
+			if(level%5==0){
 			level=0;
 			}
 		}
@@ -163,6 +167,9 @@ void my_pthread_exit(void *value_ptr) {
 SYS=1;      //do a seperate case for main context in that the whole program will end.
 stop_itime();
 //when kill list is made to put for reapable threads is created, then edit code
+if(current->id==0){
+exit(0);
+}
 if(kilhim==NULL){
 kilhim= (kilist *) malloc(sizeof(kilist));
 node *temp = (node *) malloc(sizeof(node));
@@ -182,7 +189,7 @@ if(readyQ->queues[level]->head==NULL){
 	readyQ->queues[level]->threads_done=0;
 	while(readyQ->queues[level]->head==NULL){
 		level=level+1;
-		if(level%6==0){
+		if(level%5==0){
 		level=0;
 		}
 	}
@@ -192,7 +199,7 @@ if(readyQ->queues[level]->head==NULL){
 	if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){
 		readyQ->queues[level]->threads_done=0;
 		level=level+1;
-		if(level%6==0){
+		if(level%5==0){
 		level=0;
 		}
 	}
@@ -279,7 +286,7 @@ int my_pthread_create(my_pthread_t * thread, pthread_attr_t * attr, void *(*func
 	if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){
 		readyQ->queues[level]->threads_done=0;
 		level=level+1;
-		if(level%6==0){
+		if(level%5==0){
 		level=0;
 		}
 	}
@@ -294,6 +301,10 @@ void myfo(){
     printf("billy\n");
 //my_pthread_t * th=malloc(sizeof(my_pthread_t));
 //my_pthread_create(th,NULL, (void *)(*myplay),NULL);
+//while(1){					context switching works
+//printf("hi there\n");
+//
+//}
    my_pthread_yield(); //repeats twice
     //my_pthread_exit(NULL);
    // setcontext(&current->uc);
@@ -367,12 +378,12 @@ int my_pthread_yield() {
 	enqueue(current);
 	readyQ->queues[level]->threads_done=0;
 		level=level+1;
-		if(level%6==0){
+		if(level%5==0){
 		level=0;
 		}
 	while(readyQ->queues[level]->head==NULL&&level!=j){
 		level=level+1;
-		if(level%6==0){
+		if(level%5==0){
 		level=0;
 		}
 	}
@@ -385,7 +396,7 @@ int my_pthread_yield() {
 		if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){
 			readyQ->queues[level]->threads_done=0;
 			level=level+1;
-			if(level%6==0){
+			if(level%5==0){
 			level=0;
 			}
 		}
@@ -400,18 +411,27 @@ int my_pthread_join(my_pthread_t thread, void **value_ptr) {
     
     SYS=1;
     stop_itime();
+	while(kilhim==NULL){
+	my_pthread_yield();
+	SYS=1;
+	stop_itime();
+	}
 	node* look=kilhim->begin;
 	int check=-1;
 	int x=(int)thread;
 	while(check!=x){
-		while(look->next!=NULL){	
-	        	if(look->thread->id==x||look->next->thread->id==x){		
+		if(look!=NULL){
+			while(look->next!=NULL){	
+		        	if(look->thread->id==x||look->next->thread->id==x){		
+					break;
+   				 }
+			}
+			if(look->thread->id==x){
+
 				break;
-   			 }
+			}
+		
 		}
-		if(look->thread->id==x||look->next->thread->id==x){		
-				break;
-   		}
 		my_pthread_yield();
 		SYS=1;
 		stop_itime();
@@ -448,6 +468,7 @@ int main(){
     my_pthread_create(thread,NULL, (void *)(*myplay),NULL);
     my_pthread_yield();
     my_pthread_join(1,NULL);
+    my_pthread_create(thread,NULL, (void *)(*myplay),NULL);	
     printf("tim tam\n");
 
 
