@@ -19,7 +19,7 @@
 #include "ucontext.h"//add ucontext
 
 typedef uint my_pthread_t;
-//typedef uint my_pthread_t;
+typedef uint my_pthread_t;
 
 typedef struct threadControlBlock {
     /* add something here */
@@ -32,8 +32,8 @@ typedef struct threadControlBlock {
 /* mutex struct definition */
 typedef struct my_pthread_mutex_t {
     int mid; //mutex id
-    int lock;	 //locking mechanism (this is given to user and the lock is used for atomicity)
-    int T_hold; //holder of the mutex	
+    int lock;    //locking mechanism (this is given to user and the lock is used for atomicity)
+    int T_hold; //holder of the mutex   
 } my_pthread_mutex_t;
 
 /* define your data structures here: */
@@ -58,12 +58,12 @@ queue *queues[QUEUE_LEVELS];
 
 } ready_queue;
 
-typedef struct otherQueues{
-    node *head;
-    node *back;
-} otherQueues;
 
-
+typedef struct waitQueues{
+    struct node *head;
+    struct waitQueues *next;
+    int id;
+} waitQueues;
 
 
 
