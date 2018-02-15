@@ -757,7 +757,7 @@ int main(){
     my_pthread_mutex_init(key,mutexattr);
     key2=malloc(sizeof(my_pthread_mutex_t));
     my_pthread_mutex_init(key2,mutexattr);
-    
+
     my_pthread_t * thread=malloc(sizeof(my_pthread_t));
     printf("first\n");     
     my_pthread_create(thread,NULL, (void *)(*myfunc),NULL);
@@ -766,8 +766,8 @@ int main(){
     my_pthread_t * thread2=malloc(sizeof(my_pthread_t));
     printf("second\n");     
     my_pthread_create(thread2,NULL, (void *)(*myfunc2),NULL);
-        my_pthread_create(thread2,NULL, (void *)(*myfunc2),NULL);
-            my_pthread_create(thread2,NULL, (void *)(*myfunc2),NULL);
+    my_pthread_create(thread2,NULL, (void *)(*myfunc2),NULL);
+    my_pthread_create(thread2,NULL, (void *)(*myfunc2),NULL);
     my_pthread_yield();
     my_pthread_yield();
     my_pthread_yield();
