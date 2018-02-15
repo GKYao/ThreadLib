@@ -81,7 +81,6 @@ void multilevelQueue(tcb * main){
             for (i = i + 1; i < 6; i++){
                 High_Node = readyQ->queues[i]->head;
                 if (High_Node != NULL){
-
                     break;
                 }
             }
@@ -360,7 +359,6 @@ int my_pthread_create(my_pthread_t * thread, pthread_attr_t * attr, void *(*func
     }
     start_itime();
     SYS=0;
-
     swapcontext(&temp_tcb->uc,&current->uc);*/
 
     my_pthread_yield(); 
@@ -577,7 +575,8 @@ int my_pthread_mutex_init(my_pthread_mutex_t *mutex, const pthread_mutexattr_t *
     //initialize mutex
     __sync_bool_compare_and_swap(&SYS,untaken,taken);
     stop_itime();
-    mutex->mid=mutexid+1;
+   mutexid=mutexid+1;
+    mutex->mid=mutexid;
     mutex->lock=0;
     //initialize waitQ
     if(waitQ==NULL){
@@ -722,6 +721,7 @@ void myfunc2(){
 printf("billy\n");
 my_pthread_mutex_lock(key2);
 printf("yes\n" );
+while(1){}
 my_pthread_mutex_unlock(key2);
 return;
 }
@@ -802,15 +802,19 @@ node *temp = (node *) malloc(sizeof(node));
 return ret;
 }
 void  my_pthread_mutex_search(my_pthread_mutex_t *mutex){
-    int id=mutex->mid;
+    int lid=mutex->mid;
     waitQueues * temp=waitQ;
     while(temp->next){
-        if(temp->id==id){
+        if(temp->id==lid){
             current_wait_Q=temp;
             return;
     }
     temp=temp->next;
   }
+	if(temp->id==lid){
+            current_wait_Q=temp;
+            return;
+    }
   current_wait_Q=NULL;
   return;
 }
