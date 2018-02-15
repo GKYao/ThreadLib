@@ -36,6 +36,9 @@ typedef struct my_pthread_mutex_t {
     int T_hold; //holder of the mutex   
 } my_pthread_mutex_t;
 
+
+
+
 /* define your data structures here: */
 typedef struct node {
     struct node *next;
@@ -80,7 +83,7 @@ void sighandler(int sig);
 
 
 /* Function Declarations: */
-
+void  my_pthread_mutex_search(my_pthread_mutex_t *mutex);
 /* create a new thread */
 int my_pthread_create(my_pthread_t * thread, pthread_attr_t * attr, void *(*function)(void*), void * arg);
 

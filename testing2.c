@@ -20,10 +20,16 @@ struct sigaction act, oact;
 int lock=0;
 int mutexid=1;
 waitQueues * waitQ=NULL;
-waitQueues * current_wait_Q;
+waitQueues * current_wait_Q=NULL;
 //delete later
 my_pthread_mutex_t *key;
 my_pthread_mutex_t *key2;
+my_pthread_mutex_t *key3;
+my_pthread_mutex_t *key4;
+my_pthread_mutex_t *key5;
+
+
+
 void multilevelQueue(tcb * main){
 
     readyQ = malloc(sizeof(ready_queue));
@@ -567,18 +573,17 @@ int my_pthread_mutex_init(my_pthread_mutex_t *mutex, const pthread_mutexattr_t *
     if(waitQ==NULL){
         waitQinit();
     } 
-
+    
     //Add new Q into wait Q
     waitQueues * newQ=malloc(sizeof(waitQueues));
     newQ->head=NULL;
     newQ->id=mutex->mid; 
     waitQadd(newQ);
-    current_wait_Q=newQ;
-   // my_pthread_yield();	You get extra time should we allow that??? Probably.
+   // my_pthread_yield();   You get extra time should we allow that??? Probably.
    if(readyQ!=NULL){
-    my_pthread_yield();	
+    my_pthread_yield(); 
     start_itime();
-   }	
+   }    
     SYS=0;
     return 0;
 }
@@ -588,10 +593,13 @@ int my_pthread_mutex_lock (my_pthread_mutex_t *mutex){
   // printf("%d:%d\n", current->id,readyQ->queues[0]->head->thread->id);
     SYS=1;
     stop_itime();
-	int d=0;
+    int d=0;
+    my_pthread_mutex_search(mutex);
+    waitQueues * wait=current_wait_Q;
     if (mutex->lock == 1) {
         stop_itime();
         node * temp;
+
 //Putting current thread into wait queue
 //storing into current wait Q
     //if current wait Q is empty
@@ -599,12 +607,12 @@ int my_pthread_mutex_lock (my_pthread_mutex_t *mutex){
     target->thread=current;
     target->next=NULL;
     target->level=level;
-    if(current_wait_Q->head==NULL){
-        current_wait_Q->head=target;
+    if(wait->head==NULL){
+        wait->head=target;
     }
     //traverse the current wait Q to enqueue new node into the rear of wait Q
     else{
-    temp=current_wait_Q->head;
+    temp=wait->head;
     while(temp->next!=NULL){
         temp=temp->next;
         }
@@ -631,17 +639,17 @@ temporary=current;
             }
         }
     current=dequeue();
-	d=1;
+    d=1;
         start_itime();
-	SYS=0;
+    SYS=0;
     swapcontext(&temporary->uc,&current->uc);
-	SYS=1;
-	stop_itime();
+    SYS=1;
+    stop_itime();
     }
     mutex->lock = 1;
     if(readyQ!=NULL&&d==0){
     my_pthread_yield();
-    start_itime();	
+    start_itime();  
     }
     SYS=0;
     return 0;
@@ -652,6 +660,10 @@ temporary=current;
 int my_pthread_mutex_unlock(my_pthread_mutex_t *mutex) { //what are you doing
     SYS=1;
     stop_itime();
+    my_pthread_mutex_search(mutex);
+    if(current_wait_Q->head!=NULL){
+     
+    
     node *temp=current_wait_Q->head;
     if(temp->next=NULL){
         //putting it back
@@ -674,9 +686,7 @@ int my_pthread_mutex_unlock(my_pthread_mutex_t *mutex) { //what are you doing
         //pop
         temp->next=temp->next->next;
 
-    }
-
-
+    }}
     mutex->lock = 0;
     if(readyQ!=NULL){
     my_pthread_yield();
@@ -691,17 +701,39 @@ void myfunc(){
 //printf("%d:%d\n", current->id,readyQ->queues[0]->size);
 printf("billy\n");
 my_pthread_mutex_lock(key);
-
+printf("yes!!!\n" );
+my_pthread_mutex_unlock(key);
 return;
 }
 void myfunc2(){
 //printf("%d:%d\n", current->id,readyQ->queues[0]->size);
 printf("billy\n");
 my_pthread_mutex_lock(key2);
-
+printf("yes\n" );
+my_pthread_mutex_unlock(key2);
 return;
 }
 
+
+
+
+
+int my_pthread_mutex_destroy(my_pthread_mutex_t *mutex){
+    SYS=1;
+    stop_itime();
+    my_pthread_mutex_search(mutex);
+    waitQueues * target=current_wait_Q;
+    if(target->head||mutex->lock==1){
+        printf("Error\n");
+    }
+    else{
+        free(target->head);
+    }
+    my_pthread_yield();
+    start_itime();
+    SYS=0;
+    return 0;
+}
 
 int main(){
    // thread_init();
@@ -715,9 +747,20 @@ int main(){
     my_pthread_t * thread=malloc(sizeof(my_pthread_t));
     printf("first\n");     
     my_pthread_create(thread,NULL, (void *)(*myfunc),NULL);
+    my_pthread_create(thread,NULL, (void *)(*myfunc),NULL);
+    my_pthread_create(thread,NULL, (void *)(*myfunc),NULL);
     my_pthread_t * thread2=malloc(sizeof(my_pthread_t));
     printf("second\n");     
-    my_pthread_create(thread2,NULL, (void *)(*myfunc),NULL);
+    my_pthread_create(thread2,NULL, (void *)(*myfunc2),NULL);
+        my_pthread_create(thread2,NULL, (void *)(*myfunc2),NULL);
+            my_pthread_create(thread2,NULL, (void *)(*myfunc2),NULL);
+    my_pthread_yield();
+    my_pthread_yield();
+    my_pthread_yield();
+    my_pthread_yield();
+    my_pthread_yield();
+    my_pthread_mutex_destroy(key2);
+
     printf("%d\n",waitQ->id );
     return 0;
 
@@ -743,4 +786,17 @@ node *temp = (node *) malloc(sizeof(node));
                 readyQ->queues[level]->size--;
     }
 return ret;
+}
+void  my_pthread_mutex_search(my_pthread_mutex_t *mutex){
+    int id=mutex->mid;
+    waitQueues * temp=waitQ;
+    while(temp->next){
+        if(temp->id==id){
+            current_wait_Q=temp;
+            return;
+    }
+    temp=temp->next;
+  }
+  current_wait_Q=NULL;
+  return;
 }
