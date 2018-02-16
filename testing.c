@@ -2,6 +2,10 @@
 #include "ucontext.h"
 #include <stdio.h>
 #include <sys/time.h>
+#include <errno.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
 #define stac 40000
 #define taken 1
 #define untaken 0
@@ -19,6 +23,15 @@ struct itimerval it;
 struct sigaction act, oact;
 int lock=0;
 int mutexid=1;
+waitQueues * waitQ=NULL;
+waitQueues * current_wait_Q=NULL;
+//delete later
+my_pthread_mutex_t *key;
+my_pthread_mutex_t *key2;
+my_pthread_mutex_t *key3;
+my_pthread_mutex_t *key4;
+my_pthread_mutex_t *key5;
+
 
 
 void multilevelQueue(tcb * main){
@@ -29,7 +42,7 @@ void multilevelQueue(tcb * main){
         readyQ->queues[i] = (queue* )malloc(sizeof(queue));
         readyQ->queues[i]->head = NULL;
         readyQ->queues[i]->back = NULL;
-	readyQ->queues[i]->size = 0;
+    readyQ->queues[i]->size = 0;
         //readyQ->queues[i]=NULL;
         //readyQ->queues[i]->level = i;
     }
@@ -50,9 +63,9 @@ void multilevelQueue(tcb * main){
     //node *High_Node = NULL;
 //insert main context
     /*readyQ->queues[0]->head=(node*)malloc(sizeof(node));
-    readyQ->queues[0]->head->thread=(tcb*)malloc(sizeof(tcb));	
+    readyQ->queues[0]->head->thread=(tcb*)malloc(sizeof(tcb));  
     readyQ->queues[0]->head->thread=current;
-    readyQ->queues[0]->head->next=NULL;	
+    readyQ->queues[0]->head->next=NULL; 
     readyQ->queues[0]->back=readyQ->queues[0]->head;*/
     //find highest node in queue
    // for (i = 0; i < 6; i++){
@@ -72,7 +85,6 @@ void multilevelQueue(tcb * main){
             for (i = i + 1; i < 6; i++){
                 High_Node = readyQ->queues[i]->head;
                 if (High_Node != NULL){
-
                     break;
                 }
             }
@@ -93,7 +105,7 @@ void multilevelQueue(tcb * main){
 
 void start_itime(){ //later put up a way to tell how much time using multileveled queue
     //setup Itimer
-	int x=level+1;
+    int x=level+1;
     act.sa_handler = sighandler;
     sigemptyset(&act.sa_mask);
     act.sa_flags = 0;
@@ -117,81 +129,83 @@ void stop_itime(){
 void sighandler(int sig)
 {   //must be fixed this is for changing priority
  if(SYS==0){
-        SYS=1;
+        __sync_bool_compare_and_swap(&SYS,untaken,taken);
         stop_itime();
-	int j=0;
+    int j=0;
         tcb *swap_tcb = (tcb *) malloc(sizeof(tcb));
         swap_tcb=current;
-	int z=swap_tcb->id;
+    int z=swap_tcb->id;
         if(current==NULL){
-		current==swap_tcb;
-		return;
-        }	 
-   	if(readyQ->queues[level]->head==NULL){
-		if(level!=4){
-			level=level+1;
-			enqueue(swap_tcb);
-			level=level-1;
-		}else{
-			j=4;
-		}
-		readyQ->queues[level]->threads_done=0;
-		int a=level+1;
-		if(level!=4){
-			if(readyQ->queues[level]->head==NULL&&readyQ->queues[a]->head->thread->id==z){
-				if(level<3){
-				level=level+2;
-				}else{
-				level=0;
-				}
-			}
-		}
-		while(readyQ->queues[level]->head==NULL){
-			level=level+1;
-			if(level%5==0){
-			level=0;
-			}
-		}
-		if(j=4){
-			int x=level;
-			level=4;	
-			enqueue(swap_tcb);
-			level=x;
-		}
-	   current=dequeue();
-	}else{			//case head is not null meaning yielding with sig does not have a priority switch
- 		readyQ->queues[level]->threads_done=readyQ->queues[level]->threads_done+1;
-		if(level!=4){
-			level=level+1;
-			enqueue(swap_tcb);
-			level=level-1;
-		}else{
-			enqueue(swap_tcb);
-		}   
-		if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){
-			readyQ->queues[level]->threads_done=0;
-			int a=level+1;
-		if(level<4){
-			if(readyQ->queues[a]->head->thread->id==z){
-				level=level+1;
-			}
-		}
-			level=level+1;
-			if(level%5==0){
-			level=0;
-			}
-			while(readyQ->queues[level]->head==NULL){
-				level=level+1;
-				if(level%5==0){
-				level=0;
-				}
-			}
-		}
-   	current=dequeue();
+        current==swap_tcb;
+        return;
+        }    
+    if(readyQ->queues[level]->head==NULL){
+        if(level!=4){
+            level=level+1;
+            enqueue(swap_tcb);
+            level=level-1;
+        }else{
+            j=4;
+        }
+        readyQ->queues[level]->threads_done=0;
+        int a=level+1;
+        if(level!=4){
+            if(readyQ->queues[level]->head==NULL&&readyQ->queues[a]->head->thread->id==z){
+                if(level<3){
+                level=level+2;
+                }else{
+                level=0;
+                }
+            }
+        }
+        while(readyQ->queues[level]->head==NULL){
+            level=level+1;
+            if(level%5==0){
+            level=0;
+            }
+        }
+        if(j=4){
+            int x=level;
+            level=4;    
+            enqueue(swap_tcb);
+            level=x;
+        }
+       current=dequeue();
+    }else{          //case head is not null meaning yielding with sig does not have a priority switch
+        readyQ->queues[level]->threads_done=readyQ->queues[level]->threads_done+1;
+        if(level!=4){
+            level=level+1;
+            enqueue(swap_tcb);
+            level=level-1;
+        }else{
+            enqueue(swap_tcb);
+        }   
+        if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){
+            readyQ->queues[level]->threads_done=0;
+            int a=level+1;
+        if(level<4){
+            if(readyQ->queues[a]->head->thread->id==z){
+                level=level+1;
+            }
+        }
+            level=level+1;
+            if(level%5==0){
+            level=0;
+            }
+            while(readyQ->queues[level]->head==NULL){
+                level=level+1;
+                if(level%5==0){
+                level=0;
+                }
+            }
+        }
+    current=dequeue();
         }   
         start_itime();
-        SYS=0;
+        __sync_bool_compare_and_swap(&SYS,taken,untaken);
         swapcontext(&swap_tcb->uc,&current->uc);
+        start_itime();
+        __sync_bool_compare_and_swap(&SYS,taken,untaken);
     }
         return;    
 }
@@ -199,7 +213,7 @@ void sighandler(int sig)
 
 //start Itimer
 void my_pthread_exit(void *value_ptr) {
-SYS=1;      //do a seperate case for main context in that the whole program will end.
+__sync_bool_compare_and_swap(&SYS,untaken,taken);     //do a seperate case for main context in that the whole program will end.
 stop_itime();
 //when kill list is made to put for reapable threads is created, then edit code
 if(current->id==0){
@@ -210,12 +224,16 @@ kilhim= (kilist *) malloc(sizeof(kilist));
 node *temp = (node *) malloc(sizeof(node));
 temp->thread=current;
 temp->next=NULL;
+//int * a=(int*)malloc(sizeof(int));
+//a=(int*)value_ptr;
 temp->thread->return_value=value_ptr;
 kilhim->begin=temp;
 }else{
 node *temp = (node *) malloc(sizeof(node));
 temp->thread=current;
 temp->next=NULL;
+//int * a=(int*)malloc(sizeof(int));
+//a=(int*)value_ptr;
 temp->thread->return_value=value_ptr;
 temp->next=kilhim->begin;
 kilhim->begin=temp;
@@ -223,36 +241,38 @@ kilhim->begin=temp;
 tcb *n_tcb = (tcb *) malloc(sizeof(tcb));
 n_tcb=current;
 if(readyQ->queues[level]->head==NULL){
-	readyQ->queues[level]->threads_done=0;
-	while(readyQ->queues[level]->head==NULL){
-		level=level+1;
-		if(level%5==0){
-		level=0;
-		}
-	}
+    readyQ->queues[level]->threads_done=0;
+    while(readyQ->queues[level]->head==NULL){
+        level=level+1;
+        if(level%5==0){
+        level=0;
+        }
+    }
    current=dequeue();
 }else{
- 	readyQ->queues[level]->threads_done=readyQ->queues[level]->threads_done+1;    
-	if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){ //Checked logic it is for, when exiting a queue reaches priority limit due to the thread being elminiated counting as a thread done. This leads to switching to the next. 
-		readyQ->queues[level]->threads_done=0;
-		level=level+1;
-		if(level%5==0){
-		level=0;
-		}
-		while(readyQ->queues[level]->head==NULL){
-			level=level+1;
-			if(level%5==0){
-				level=0;
-			}
-		}
-	}
+    readyQ->queues[level]->threads_done=readyQ->queues[level]->threads_done+1;    
+    if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){ //Checked logic it is for, when exiting a queue reaches priority limit due to the thread being elminiated counting as a thread done. This leads to switching to the next. 
+        readyQ->queues[level]->threads_done=0;
+        level=level+1;
+        if(level%5==0){
+        level=0;
+        }
+        while(readyQ->queues[level]->head==NULL){
+            level=level+1;
+            if(level%5==0){
+                level=0;
+            }
+        }
+    }
 tcb *nswap_tcb = (tcb *) malloc(sizeof(tcb));// might want to include kill
 nswap_tcb=dequeue(); 
 current=nswap_tcb;
 }
 start_itime();
-SYS=0;
+        __sync_bool_compare_and_swap(&SYS,taken,untaken);
 swapcontext(&n_tcb->uc,&current->uc);
+start_itime();
+        __sync_bool_compare_and_swap(&SYS,taken,untaken);
 };
 
 
@@ -262,7 +282,7 @@ int my_pthread_create(my_pthread_t * thread, pthread_attr_t * attr, void *(*func
 //start Itimer
             //replace with dequeue regarding getting thread, orig is not meant to be permanent.
 //get context
-    SYS=1;
+    __sync_bool_compare_and_swap(&SYS,untaken,taken);
             
     if(current==NULL){
 
@@ -277,7 +297,7 @@ int my_pthread_create(my_pthread_t * thread, pthread_attr_t * attr, void *(*func
             main_tcb->id=id;//(IMPORTANT!!! main ID??????)
         id=id+1;
         if(getcontext(&main_tcb->uc)!=0){
-        printf("error\n");
+        printf("%s\n",strerror(EINVAL));
         exit(EXIT_FAILURE);
         }
 
@@ -290,11 +310,11 @@ int my_pthread_create(my_pthread_t * thread, pthread_attr_t * attr, void *(*func
     }
 
     if(getcontext(&thr)!=0){
-    printf("error\n");
+    printf("%s\n",strerror(EINVAL));
     exit(EXIT_FAILURE);
     }
     if(getcontext(&op_context)!=0){
-    printf("error\n");
+    printf("%s\n",strerror(EINVAL));
     exit(EXIT_FAILURE);
     }   
     op_context.uc_link=0;   //later change instead of 0 some other type of link to exit
@@ -302,19 +322,24 @@ int my_pthread_create(my_pthread_t * thread, pthread_attr_t * attr, void *(*func
     op_context.uc_stack.ss_size=stac;
     op_context.uc_stack.ss_flags=0;
     if(arg==NULL){
-    makecontext(&op_context,(void*)(*my_pthread_exit),0);
-    }
-
-
-
+    makecontext(&op_context,(void*)(*my_pthread_exit),1,NULL);
+    }else{
+	int* zam=(int*)&arg;
+	int t=zam[0];
+  	int s= zam[1];
+	makecontext(&op_context,(void*)(*my_pthread_exit),2,t,s);
+	}	
     thr.uc_link=&op_context;    // some other type of link to exit so no problem is encountered
     thr.uc_stack.ss_sp=(int*)malloc(stac);
     thr.uc_stack.ss_size=stac;
     thr.uc_stack.ss_flags=0;    
     if(arg==NULL){
-    makecontext(&thr,(void*)(*function),0);
+    makecontext(&thr,(void*)(*function),1,NULL);
     }else{
-    makecontext(&thr,(void*)(*function),1,arg);
+	int* tam=(int*)&arg;
+	int a=tam[0];
+  	int b= tam[1];
+    makecontext(&thr,(void*)(*function),2,a,b);
     }
     tcb *new_tcb = (tcb *) malloc(sizeof(tcb));
     new_tcb->id=id;
@@ -323,30 +348,35 @@ int my_pthread_create(my_pthread_t * thread, pthread_attr_t * attr, void *(*func
     new_tcb->uc=thr;
     tcb *temp_tcb = (tcb *) malloc(sizeof(tcb));
     temp_tcb=current;
-	int d=level;
-	level=0;
+    int d=level;
+    level=0;
     enqueue(new_tcb);
-	level=d;	
+    level=d;   
+
+
   /*  enqueue(current);
     //current=new_tcb; //now it is that our new tcb is going to run
     readyQ->queues[level]->threads_done=readyQ->queues[level]->threads_done+1;    
-	if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){
-		readyQ->queues[level]->threads_done=0;
-		level=level+1;
-		if(level%5==0){
-		level=0;
-		}
-		while(readyQ->queues[level]->head==NULL){
-		level=level+1;
-			if(level%5==0){
-			level=0;
-			}
-		}
-	}
+    if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){
+        readyQ->queues[level]->threads_done=0;
+        level=level+1;
+        if(level%5==0){
+        level=0;
+        }
+        while(readyQ->queues[level]->head==NULL){
+        level=level+1;
+            if(level%5==0){
+            level=0;
+            }
+        }
+    }
     start_itime();
     SYS=0;
     swapcontext(&temp_tcb->uc,&current->uc);*/
-    my_pthread_yield();
+
+    my_pthread_yield(); 
+    start_itime();
+        __sync_bool_compare_and_swap(&SYS,taken,untaken);
     return 0;
 };
 
@@ -355,7 +385,7 @@ void myfo(){
     printf("billy\n");
 //my_pthread_t * th=malloc(sizeof(my_pthread_t));
 //my_pthread_create(th,NULL, (void *)(*myplay),NULL);
-//while(1){				//	context switching works
+//while(1){             //  context switching works
 printf("hi there\n");
 //
 //}
@@ -396,8 +426,9 @@ int enqueue (tcb *thread) {
         readyQ->queues[level]->head = temp;
         }
     readyQ->queues[level]->size++;
-
+ //   if(readyQ->queues[0]->size>1){printf("%dyes its here:%d\n", readyQ->queues[0]->head->thread->id,readyQ->queues[0]->head->next->thread->id);}
         return 1;
+    
 }
 
 
@@ -423,128 +454,415 @@ int enqueue (tcb *thread) {
 }*/
 
 int my_pthread_yield() {
-    SYS=1;
+    __sync_bool_compare_and_swap(&SYS,untaken,taken);
     stop_itime();
     tcb* temp_tcb=NULL;
     //worry about null case next
-	
-	int j=level;
+    
+    int j=level;
     if(readyQ->queues[level]->head==NULL){
-	temp_tcb=current;
-	enqueue(current);
-	readyQ->queues[level]->threads_done=0;
-		level=level+1;
-		if(level%5==0){
-		level=0;
-		}
-	while(readyQ->queues[level]->head==NULL){
-		level=level+1;
-		if(level%5==0){
-		level=0;
-		}
-	}
-	current=dequeue();
-     }else{
- 		readyQ->queues[level]->threads_done=readyQ->queues[level]->threads_done+1;
-		temp_tcb=current;
-		enqueue(current);
-		//current=dequeue();    
-		if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){
-			readyQ->queues[level]->threads_done=0;
-			level=level+1;
-			if(level%5==0){
-			level=0;
-			}
-			while(readyQ->queues[level]->head==NULL){ //if next is null
-				level=level+1;
-				if(level%5==0){
-				level=0;
-				}
-			}
-		}
-	current=dequeue(); 
+    temp_tcb=current;
+    enqueue(current);
+    readyQ->queues[level]->threads_done=0;
+        level=level+1;
+        if(level%5==0){
+        level=0;
+        }
+    while(readyQ->queues[level]->head==NULL){
+        level=level+1;
+        if(level%5==0){
+        level=0;
+        }
+    }
+    current=dequeue();
+     }
+
+    else{
+        readyQ->queues[level]->threads_done=readyQ->queues[level]->threads_done+1;
+        temp_tcb=current;
+        enqueue(current);
+        //current=dequeue();    
+        if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){
+            readyQ->queues[level]->threads_done=0;
+            level=level+1;
+            if(level%5==0){
+            level=0;
+            }
+            while(readyQ->queues[level]->head==NULL){ //if next is null
+                level=level+1;
+                if(level%5==0){
+                level=0;
+                }
+            }
+        }
+    current=dequeue(); 
 }
     start_itime();
-    SYS=0;
+        __sync_bool_compare_and_swap(&SYS,taken,untaken);
     swapcontext(&temp_tcb->uc,&current->uc);
+    start_itime();
+        __sync_bool_compare_and_swap(&SYS,taken,untaken);
     return 0;
 };
 
 int my_pthread_join(my_pthread_t thread, void **value_ptr) {
     
-    SYS=1;
+    __sync_bool_compare_and_swap(&SYS,untaken,taken);
     stop_itime();
-	while(kilhim==NULL){
-	my_pthread_yield();
-	SYS=1;
-	stop_itime();
-	}
-	node* look=kilhim->begin;
-	int check=-1;
-	int x=(int)thread;
-	while(check!=x){
-		if(look!=NULL){
-			while(look->next!=NULL){	
-		        	if(look->thread->id==x||look->next->thread->id==x){		
-					break;
-   				 }
-			}
-			if(look->thread->id==x){
+	if(readyQ==NULL){
+	printf("%s\n",strerror(EINVAL));
+	exit(EXIT_FAILURE);
+    }
+    while(kilhim==NULL){
+    my_pthread_yield();
+    __sync_bool_compare_and_swap(&SYS,untaken,taken);
+    stop_itime();
+    }
+    node* look=kilhim->begin;
+    int check=-1;
+    int x=(int)thread;
+    while(check!=x){
+        if(look!=NULL){
+            while(look->next!=NULL){    
+                    if(look->thread->id==x||look->next->thread->id==x){     
+                    break;
+                 }
+		look=look->next;
+            }
+        	if(look->next!=NULL){
+		  if(look->next->thread->id==x){
 
-				break;
-			}
-		
+                break;
 		}
-		my_pthread_yield();
-		SYS=1;
-		stop_itime();
-		look=kilhim->begin;		
-	}
-	if(look->thread->id==x){
-	kilhim->begin=look->next;
-	if(value_ptr!=NULL){
-	*value_ptr=look->thread->return_value;
-	}
-	free(look);
-	}else{
-	node* temp=look->next;
-	if(value_ptr!=NULL){
-	*value_ptr=look->thread->return_value;
-	}
-	look->next=look->next->next;
-	free(temp);
-	}
-	my_pthread_yield();
-	//start_itime();
-	//SYS=0;
+            }
+            if(look->thread->id==x){
+
+                break;
+            }
+        
+        }
+        my_pthread_yield();
+        __sync_bool_compare_and_swap(&SYS,untaken,taken);
+        stop_itime();
+        look=kilhim->begin;     
+    }
+    if(look->thread->id==x){
+    kilhim->begin=look->next;
+    if(value_ptr!=NULL){
+    *value_ptr=look->thread->return_value;
+    //*value_ptr=j;
+//value_ptr=j;
+    }
+    free(look);
+    }else{
+    node* temp=look->next;
+    if(value_ptr!=NULL){
+	   *value_ptr=temp->thread->return_value;
+   // *value_ptr=j;
+  //double* j=(double*)value_ptr;
+//j=look->thread->return_value;
+//*value_ptr=look->thread->return_value;
+//value_ptr=j;
+    }
+    look->next=look->next->next;
+    free(temp);
+    }
+    my_pthread_yield();
+    start_itime();
+            __sync_bool_compare_and_swap(&SYS,taken,untaken);
+
     return 0;
 };
 
 
+void waitQinit(){
+    waitQueues *waitQ=malloc(sizeof(waitQueues));
+}
+
+
+void waitQadd(waitQueues * new_wait_Q){
+    struct waitQueues * temp;
+    if(waitQ){
+    }
+    else{
+        waitQ=new_wait_Q;
+        return;
+    }
+    if(waitQ->next){
+    temp=waitQ->next;
+    while(temp->next!=NULL){
+        temp=temp->next;
+    }
+    temp->next=new_wait_Q;
+    return;}
+    else{
+        waitQ->next=new_wait_Q;
+        return;
+    }
+}
+
+
+int my_pthread_mutex_init(my_pthread_mutex_t *mutex, const pthread_mutexattr_t *mutexattr){
+    //initialize mutex
+    __sync_bool_compare_and_swap(&SYS,untaken,taken);
+    stop_itime();
+	if(mutex==NULL){
+	printf("%s\n",strerror(EINVAL));
+	exit(EXIT_FAILURE);
+    }
+	if(mutex->lock==1){
+	printf("%s\n",strerror(EBUSY));
+	exit(EXIT_FAILURE);
+    }
+    mutex->mid=mutexid;
+    mutex->lock=0;
+    //initialize waitQ
+    if(waitQ==NULL){
+        waitQinit();
+    } 
+    
+    //Add new Q into wait Q
+    waitQueues * newQ=malloc(sizeof(waitQueues));
+	if(newQ==NULL){
+	printf("%s\n",strerror(ENOMEM));
+	exit(EXIT_FAILURE);
+	}
+    newQ->head=NULL;
+    newQ->id=mutex->mid; 
+    mutexid=mutexid+1;
+    waitQadd(newQ);
+   // my_pthread_yield();   You get extra time should we allow that??? Probably.
+   if(readyQ!=NULL){
+    my_pthread_yield(); 
+    start_itime();
+   }    
+        __sync_bool_compare_and_swap(&SYS,taken,untaken);
+    return 0;
+}
+
+
+int my_pthread_mutex_lock (my_pthread_mutex_t *mutex){
+  // printf("%d:%d\n", current->id,readyQ->queues[0]->head->thread->id);
+    __sync_bool_compare_and_swap(&SYS,untaken,taken);
+    stop_itime();
+	if(mutex==NULL){
+	printf("%s\n",strerror(EINVAL));
+	exit(EXIT_FAILURE);
+    }
+    int d=0;
+    my_pthread_mutex_search(mutex);
+    waitQueues * wait=current_wait_Q;
+	if(wait==NULL){
+        printf("%s\n",strerror(EINVAL));
+        exit(EXIT_FAILURE);
+    }
+    if (mutex->lock == 1) {
+        stop_itime();
+        node * temp;
+
+//Putting current thread into wait queue
+//storing into current wait Q
+    //if current wait Q is empty
+    node * target =(node*)malloc(sizeof(node));
+    target->thread=current;
+    target->next=NULL;
+    target->level=level;
+    if(wait->head==NULL){
+        wait->head=target;
+    }
+    //traverse the current wait Q to enqueue new node into the rear of wait Q
+    else{
+    temp=wait->head;
+    while(temp->next!=NULL){
+        temp=temp->next;
+        }
+        //Push new node
+    temp->next=target;
+    }
+
+//Need context switching
+    //............
+readyQ->queues[level]->threads_done=readyQ->queues[level]->threads_done+1;
+tcb* temporary=NULL;
+temporary=current;
+       if(readyQ->queues[level]->multiplier==readyQ->queues[level]->threads_done){
+            readyQ->queues[level]->threads_done=0;
+            level=level+1;
+            if(level%5==0){
+            level=0;
+            }
+            while(readyQ->queues[level]->head==NULL){ //if next is null
+                level=level+1;
+                if(level%5==0){
+                level=0;
+                }
+            }
+        }
+    current=dequeue();
+    d=1;
+        start_itime();
+        __sync_bool_compare_and_swap(&SYS,taken,untaken);
+    swapcontext(&temporary->uc,&current->uc);
+    __sync_bool_compare_and_swap(&SYS,untaken,taken);
+    stop_itime();
+    }
+    mutex->lock = 1;
+    if(readyQ!=NULL&&d==0){
+    my_pthread_yield();
+    start_itime();  
+    }
+        __sync_bool_compare_and_swap(&SYS,taken,untaken);
+    return 0;
+}
+
+
+
+int my_pthread_mutex_unlock(my_pthread_mutex_t *mutex) { //what are you doing
+    __sync_bool_compare_and_swap(&SYS,untaken,taken);
+    stop_itime();
+	if(mutex==NULL){
+	printf("%s\n",strerror(EINVAL));
+	exit(EXIT_FAILURE);
+    }
+    my_pthread_mutex_search(mutex);
+	if(current_wait_Q==NULL){
+	printf("%s\n",strerror(EINVAL));
+	exit(EXIT_FAILURE);
+    }
+    if(current_wait_Q->head!=NULL){
+     
+    
+    node *temp=current_wait_Q->head;
+    if(temp->next==NULL){
+        //putting it back
+        int d=level;
+        level=temp->level;
+        enqueue(temp->thread);
+        level=d;
+        //pop
+        current_wait_Q->head=NULL;
+    }
+    else{
+        while(temp->next->next){
+            temp=temp->next;
+        }
+        //putting it back
+        int d=level;
+        level=temp->next->level;
+        enqueue(temp->next->thread);
+        level=d;
+        //pop
+        temp->next=temp->next->next;
+
+    }}
+    mutex->lock = 0;
+    if(readyQ!=NULL){
+    my_pthread_yield();
+    start_itime();
+    }
+        __sync_bool_compare_and_swap(&SYS,taken,untaken);
+    return 0;
+}
+
+
+void* myfunc(void* a){
+//printf("%d:%d\n", current->id,readyQ->queues[0]->size);
+printf("billy\n");
+my_pthread_mutex_lock(key);
+printf("yes!!!\n" );
+while(1){}
+my_pthread_mutex_unlock(key);
+
+return;
+}
+void* myfunc2(void* b){
+//printf("%d:%d\n", current->id,readyQ->queues[0]->size);
+printf("billy\n");
+my_pthread_mutex_lock(key2);
+printf("yes\n" );
+if(b!=NULL){
+int* a=(int*)b;
+if(*a==4){
+printf("NOOO");
+}
+}
+my_pthread_mutex_unlock(key2);
+my_pthread_exit(b);
+return;
+}
+
+
+
+
+
+int my_pthread_mutex_destroy(my_pthread_mutex_t *mutex){
+    __sync_bool_compare_and_swap(&SYS,untaken,taken);
+    stop_itime();
+    if(mutex==NULL){
+	printf("%s\n",strerror(EINVAL));
+	exit(EXIT_FAILURE);
+    }
+    my_pthread_mutex_search(mutex);
+    waitQueues * target=current_wait_Q;
+    if(target==NULL){
+	printf("%s\n",strerror(EINVAL));
+    exit(EXIT_FAILURE);
+    }	
+    if(target->head||mutex->lock==1){
+        printf("%s\n",strerror(EBUSY));
+        exit(EXIT_FAILURE);
+    }
+    else{
+        free(target->head);
+    }
+    my_pthread_yield();
+    start_itime();
+        __sync_bool_compare_and_swap(&SYS,taken,untaken);
+    return 0;
+}
 
 int main(){
    // thread_init();
     //printf("%d\n",current->id );
 //Createthread
+    key=malloc(sizeof(my_pthread_mutex_t));
+    pthread_mutexattr_t *mutexattr;
+    my_pthread_mutex_init(key,mutexattr);
+    key2=malloc(sizeof(my_pthread_mutex_t));
+    my_pthread_mutex_init(key2,mutexattr);
+ //void*=(void)42;
     my_pthread_t * thread=malloc(sizeof(my_pthread_t));
-printf("first\n");     
-    my_pthread_create(thread,NULL, (void *)(*myplay),NULL);
-printf("fourth\n");
+    printf("first\n");     
+    my_pthread_create(thread,NULL, (void *)(*myfunc),NULL);
+    my_pthread_create(thread,NULL, (void *)(*myfunc),NULL);
+    my_pthread_create(thread,NULL, (void *)(*myfunc),NULL);
+    my_pthread_t * thread2=malloc(sizeof(my_pthread_t));
+    printf("second\n");     
+int* a=malloc(sizeof(int));
+*a=4;
+void* jay=a;
+int* b=malloc(sizeof(int));
+*b=5;
+void* bob=b;
+    my_pthread_create(thread2,NULL, (void *)(*myfunc2),jay);
+    my_pthread_create(thread2,NULL, (void *)(*myfunc2),bob);
+    my_pthread_create(thread2,NULL, (void *)(*myfunc2),NULL);
     my_pthread_yield();
-	printf("sixth\n");
-    my_pthread_join(1,NULL);
-    //my_pthread_create(thread,NULL, (void *)(*myplay),NULL);	
-    printf("tim tam\n");
-my_pthread_yield();
-printf("tim tam\n");
-my_pthread_yield();
-printf("tim tam\n");
-my_pthread_yield();
-printf("tim tam\n");
-my_pthread_yield();
-printf("tim tam\n");
-my_pthread_yield();
-printf("tim tam\n");
+    my_pthread_yield();
+    my_pthread_yield();
+    my_pthread_yield();
+    my_pthread_yield();
+    my_pthread_mutex_destroy(key2);
+void** james=(void**)malloc(sizeof(void*));
+
+	my_pthread_join(5,james);
+int** lap =(int**)james;
+//char* s=atoi((**lap));
+        printf("%d\n",(**lap));	
+	my_pthread_join(4,james);
+	my_pthread_join(6,NULL);
+int** ss =(int**)james;
+    printf("%d,%d\n",waitQ->id,(**ss));
     return 0;
 
 }
@@ -569,4 +887,23 @@ node *temp = (node *) malloc(sizeof(node));
                 readyQ->queues[level]->size--;
     }
 return ret;
+}
+void  my_pthread_mutex_search(my_pthread_mutex_t *mutex){
+    int lid=mutex->mid;
+    waitQueues * temp=waitQ;
+    while(temp->next){
+        if(temp->id==lid){
+            current_wait_Q=temp;
+            return;
+    }
+    temp=temp->next;
+  }
+    if(temp!=NULL){
+	if(temp->id==lid){
+            current_wait_Q=temp;
+            return;
+    	}
+    }
+  current_wait_Q=NULL;
+  return;
 }
